@@ -1,35 +1,48 @@
-# Official pages Papeles answers from. Start with each agency's homepage, then replace
-# these with the exact requirements pages (deep links answer far better than homepages).
+# Official sources Papeles answers from.
+#
+# Each entry has a `url` (shown to users as the citation link) and either:
+#   - nothing else: the page or PDF is downloaded from `url`, or
+#   - `file`: a checked summary under data/ is used instead, for sites that block downloads
+#     or need JavaScript. See data/manual/README.md for the rules and what's still missing.
 sources:
-  - slug: dfa-passport
-    agency: DFA
-    title: Passport appointment and requirements
-    url: https://www.passport.gov.ph/
+  - slug: sss-my-sss-registration
+    agency: SSS
+    title: Guide to registering a My.SSS member account
+    url: https://www.sss.gov.ph/wp-content/uploads/2022/05/MySSS-Member-Registration-Guide-05102022.pdf
+
+  - slug: philhealth-pmrf
+    agency: PhilHealth
+    title: PhilHealth Member Registration Form (PMRF) and instructions
+    url: https://www.philhealth.gov.ph/circulars/2021/007/AnnexG_PMRF.pdf
+
+  - slug: philhealth-senior
+    agency: PhilHealth
+    title: PhilHealth coverage for senior citizens
+    url: https://www.philhealth.gov.ph/members/senior
+
+  - slug: pagibig-membership
+    agency: Pag-IBIG Fund
+    title: Pag-IBIG membership, MID number and updating records
+    url: https://www.pagibigfund.gov.ph/member_membership.html
+    file: manual/pagibig-membership.md
+
+  - slug: psa-serbilis
+    agency: PSA
+    title: Ordering PSA birth, marriage, death certificates and CENOMAR online
+    url: https://www.psaserbilis.com.ph/
+    file: manual/psa-serbilis.md
+
   - slug: nbi-clearance
     agency: NBI
-    title: NBI clearance online application
+    title: NBI clearance online registration and renewal
     url: https://clearance.nbi.gov.ph/
-  - slug: philsys-id
+    file: manual/nbi-clearance.md
+
+  - slug: philsys
     agency: PSA
-    title: Philippine Identification System (PhilSys)
+    title: PhilSys National ID contact information
     url: https://philsys.gov.ph/
-  - slug: psa-civil-registry
-    agency: PSA
-    title: Birth, marriage and death certificates
-    url: https://psa.gov.ph/
-  - slug: sss
-    agency: SSS
-    title: Social Security System membership and benefits
-    url: https://www.sss.gov.ph/
-  - slug: philhealth
-    agency: PhilHealth
-    title: PhilHealth membership
-    url: https://www.philhealth.gov.ph/
-  - slug: pagibig
-    agency: Pag-IBIG Fund
-    title: Pag-IBIG membership and loans
-    url: https://www.pagibigfund.gov.ph/
-  - slug: lto-license
-    agency: LTO
-    title: Driver's license and vehicle registration
-    url: https://lto.gov.ph/
+    file: manual/philsys.md
+
+  # Not yet covered: DFA passport and LTO license sites block automated access, even in a
+  # browser. Add checked files for them (see data/manual/README.md).

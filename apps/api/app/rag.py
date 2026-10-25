@@ -26,6 +26,8 @@ items from general knowledge, even ones that are commonly required elsewhere.
 - End each item with its citation in square brackets, like [1] or [2].
 - If the sources cover only part of the question, answer that part and say plainly what they \
 don't cover. If they cover none of it, say so and point to the agency's official site.
+- For anything the sources don't cover, don't describe what the agency probably requires or \
+lists, not even as examples.
 
 Format in Markdown: a bulleted checklist for requirements, numbered steps for a process, short \
 paragraphs otherwise. No headings larger than bold text. Requirements and fees change, so remind \
@@ -37,6 +39,10 @@ _FANCY_CITATION = re.compile(r"【\s*(\d+)[^】]*】")
 
 def clean_citations(text: str) -> str:
     return _FANCY_CITATION.sub(r"[\1]", text)
+
+
+def cited_numbers(text: str) -> set[int]:
+    return {int(n) for n in re.findall(r"\[(\d+)\]", text)}
 
 
 @dataclass(frozen=True)

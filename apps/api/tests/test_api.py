@@ -45,7 +45,9 @@ def test_ask_returns_answer_and_deduplicated_sources(fake_answerer):
     assert res.status_code == 200
     body = res.json()
     assert body["answer"] == "Bring your PSA birth certificate [1]."
-    assert body["sources"] == [{"title": "Passport", "url": "https://a.gov.ph/p", "agency": "DFA"}]
+    assert body["sources"] == [
+        {"n": 1, "title": "Passport", "url": "https://a.gov.ph/p", "agency": "DFA"}
+    ]
     assert fake_answerer.calls[0][2] == "tl"
 
 
@@ -83,3 +85,25 @@ def test_sources_only_answerer_explains_missing_key():
     from app.rag import SourcesOnlyAnswerer
 
     assert "LLM_API_KEY" in SourcesOnlyAnswerer().answer("q", CHUNKS, "en")
+
+
+def test_ask_lists_only_cited_sources_keeping_their_numbers(fake_answerer):
+    other = RetrievedChunk("Pay online.", "NBI clearance", "https://b.gov.ph/n", "NBI")
+    app.dependency_overrides[get_retriever] = lambda: lambda q: [*CHUNKS, other]
+    fake_answerer.answer = lambda q, c, lang: "Pay online [2]."
+
+    sources = client.post("/ask", json={"question": "NBI?"}).json()["sources"]
+    assert [(s["n"], s["agency"]) for s in sources] == [(2, "NBI")]
+
+
+def test_ask_lists_no_sources_when_ai_answer_cites_none(fake_answerer):
+    fake_answerer.answer = lambda q, c, lang: "The sources don't cover passports."
+    assert client.post("/ask", json={"question": "passport?"}).json()["sources"] == []
+
+
+def test_ask_lists_all_sources_without_ai_key():
+    from app.rag import SourcesOnlyAnswerer
+
+    app.dependency_overrides[get_answerer] = lambda: SourcesOnlyAnswerer()
+    sources = client.post("/ask", json={"question": "passport?"}).json()["sources"]
+    assert [s["n"] for s in sources] == [1]

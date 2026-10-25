@@ -6,9 +6,9 @@ import { Answer } from "@/components/answer";
 import { ask, LANGS, type AskResponse, type Lang } from "@/lib/api";
 
 const EXAMPLES = [
-  "What do I need to renew my passport?",
-  "Paano kumuha ng NBI clearance?",
-  "Unsa ang requirements sa PhilSys ID?",
+  "Nakalimutan ko ang Pag-IBIG MID number ko, paano ko makukuha?",
+  "How do I order a PSA birth certificate online?",
+  "Unsaon pag-register sa My.SSS?",
 ];
 
 export function AskBox() {
@@ -95,15 +95,17 @@ export function AskBox() {
           {result.sources.length > 0 && (
             <div>
               <h2 className="mb-2 text-sm font-semibold text-zinc-500">Sources</h2>
-              <ol className="list-decimal space-y-1 pl-5 text-sm">
-                {result.sources.map((s, i) => (
-                  <li key={s.url} id={`source-${i + 1}`} className="scroll-mt-4">
+              {/* Only cited sources are listed, so numbers can skip; show them explicitly. */}
+              <ul className="space-y-1 text-sm">
+                {result.sources.map((s) => (
+                  <li key={s.url} id={`source-${s.n}`} className="flex gap-2 scroll-mt-4">
+                    <span className="text-zinc-500">[{s.n}]</span>
                     <a href={s.url} target="_blank" rel="noreferrer" className="text-blue-700 underline dark:text-blue-400">
                       {s.agency}: {s.title}
                     </a>
                   </li>
                 ))}
-              </ol>
+              </ul>
             </div>
           )}
           <p className="text-xs text-zinc-500">

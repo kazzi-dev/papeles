@@ -2,9 +2,10 @@
 
 **Know exactly what to bring before you line up.**
 
-Papeles answers questions about Philippine government paperwork (passport, NBI clearance,
-PhilSys ID, PSA certificates, SSS, PhilHealth, Pag-IBIG, LTO) in English, Tagalog or Bisaya.
-Every answer comes from official agency pages and links back to them.
+Papeles answers questions about Philippine government paperwork (SSS, PhilHealth, Pag-IBIG,
+PSA certificates, NBI clearance, PhilSys) in English, Tagalog or Bisaya. Every answer comes
+from official agency sources and links back to them. When the sources don't cover something,
+it says so instead of guessing.
 
 > Live demo: _coming soon_  ·  Screenshots: _coming soon_
 
@@ -26,8 +27,9 @@ question ──► embed (multilingual, local) ──► pgvector similarity sea
                                     answer + source links ──► web
 ```
 
-1. `python -m app.ingest` fetches each page in [`apps/api/data/sources.yaml`](apps/api/data/sources.yaml),
-   splits it into overlapping chunks, embeds them, and stores them in Postgres.
+1. `python -m app.ingest` loads each source in [`apps/api/data/sources.yaml`](apps/api/data/sources.yaml)
+   (an official web page, an official PDF, or a checked summary file), splits it into
+   overlapping chunks, embeds them, and stores them in the database.
 2. A question is embedded with the same multilingual model, so a Tagalog or Bisaya question
    still matches English source text.
 3. The closest chunks go to the LLM with instructions to answer only from them, cite them,
@@ -122,9 +124,31 @@ docker-compose.yml
 .github/workflows/ci.yml
 ```
 
+## Sources
+
+Papeles only answers from official sources, listed in
+[`sources.yaml`](apps/api/data/sources.yaml):
+
+| Agency       | What's covered                                         | How it's loaded            |
+| ------------ | ------------------------------------------------------ | -------------------------- |
+| SSS          | My.SSS member account registration                     | Official PDF guide         |
+| PhilHealth   | Member Registration Form (PMRF); senior citizen coverage | Official PDF and web page |
+| Pag-IBIG     | Membership sign-up, MID number, updating/merging records | Checked summary           |
+| PSA          | Ordering birth/marriage/death certificates, CENOMAR    | Checked summary            |
+| NBI          | Online clearance registration and renewal              | Checked summary            |
+| PhilSys      | Contact details while the site is under maintenance    | Checked summary            |
+
+Many government sites block automated downloads or need JavaScript, so those agencies use short
+summaries checked against the official page, under
+[`apps/api/data/manual/`](apps/api/data/manual/README.md). Each one names its source page and
+the date it was last checked.
+
+**Not covered yet:** DFA passports and LTO licenses. Their sites block automated access, so
+someone needs to read the official pages and add summary files. The manual README explains how.
+
 ## Roadmap
 
-- [ ] Replace agency homepages in `sources.yaml` with exact requirements pages
+- [ ] Add checked summaries for DFA passports and LTO licenses
 - [ ] Personal checklist: tick off documents you already have, saved per user
 - [ ] Office finder with hours and appointment links
 - [ ] Stream answers token by token

@@ -11,6 +11,8 @@ from app.rag import (
     Answerer,
     Lang,
     Retriever,
+    SourcesOnlyAnswerer,
+    cited_numbers,
     clean_citations,
     get_answerer,
     group_by_page,
@@ -26,6 +28,7 @@ class AskRequest(BaseModel):
 
 
 class SourceOut(BaseModel):
+    n: int  # the number the answer cites it by, e.g. [2]
     title: str
     url: str
     agency: str
@@ -49,9 +52,13 @@ def ask(
     chunks = retrieve(body.question)
     answer = clean_citations(answerer.answer(body.question, chunks, body.lang))
 
-    # One entry per page, in the same order the prompt numbered them, so [n] matches.
+    # One entry per page, numbered the same way the prompt numbered them, so [n] matches.
     sources = [
-        SourceOut(title=group[0].title, url=url, agency=group[0].agency)
-        for url, group in group_by_page(chunks).items()
+        SourceOut(n=n, title=group[0].title, url=url, agency=group[0].agency)
+        for n, (url, group) in enumerate(group_by_page(chunks).items(), 1)
     ]
+    # Show only the pages the answer cites. Without an AI key the pages are the whole answer.
+    if not isinstance(answerer, SourcesOnlyAnswerer):
+        cited = cited_numbers(answer)
+        sources = [s for s in sources if s.n in cited]
     return AskResponse(answer=answer, sources=sources)

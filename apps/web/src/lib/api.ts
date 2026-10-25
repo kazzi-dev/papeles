@@ -6,7 +6,8 @@ export const LANGS: { value: Lang; label: string }[] = [
   { value: "ceb", label: "Bisaya" },
 ];
 
-export type Source = { title: string; url: string; agency: string };
+// `n` is the number the answer cites this source by, e.g. [2].
+export type Source = { n: number; title: string; url: string; agency: string };
 
 export type AskResponse = { answer: string; sources: Source[] };
 

@@ -1,6 +1,6 @@
 import { AskBox } from "@/components/ask-box";
 
-const AGENCIES = ["DFA", "NBI", "PSA", "PhilSys", "SSS", "PhilHealth", "Pag-IBIG", "LTO"];
+const AGENCIES = ["SSS", "PhilHealth", "Pag-IBIG", "PSA", "NBI", "PhilSys"];
 
 export default function Home() {
   return (
