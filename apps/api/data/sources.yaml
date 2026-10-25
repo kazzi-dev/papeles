@@ -5,6 +5,16 @@
 #   - `file`: a checked summary under data/ is used instead, for sites that block downloads
 #     or need JavaScript. See data/manual/README.md for the rules and what's still missing.
 sources:
+  - slug: sss-become-a-member
+    agency: SSS
+    title: Become an SSS member and get an SS number
+    url: https://www.sss.gov.ph/become-an-sss-member/
+
+  - slug: sss-citizens-charter-2026
+    agency: SSS
+    title: SSS Citizen's Charter 2026 (all services, requirements and steps)
+    url: https://www.sss.gov.ph/wp-content/uploads/2026/07/2026-SSS-Citizens-Charter-1st-Edition-External-Services.pdf
+
   - slug: sss-my-sss-registration
     agency: SSS
     title: Guide to registering a My.SSS member account
@@ -44,5 +54,11 @@ sources:
     url: https://philsys.gov.ph/
     file: manual/philsys.md
 
-  # Not yet covered: DFA passport and LTO license sites block automated access, even in a
-  # browser. Add checked files for them (see data/manual/README.md).
+  - slug: lto-licensing
+    agency: LTO
+    title: Student permit, driver's license, renewal and fees (LTO Driver's Manual)
+    url: https://portal.lto.gov.ph/
+    file: manual/lto-licensing.md
+
+  # Not yet covered: DFA passports. dfa.gov.ph blocks automated access, even in a browser.
+  # Add a checked file for it (see data/manual/README.md).

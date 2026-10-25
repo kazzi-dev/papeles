@@ -48,3 +48,11 @@ def test_sources_yaml_entries_are_complete():
         assert {"slug", "agency", "title", "url"} <= e.keys(), e
         if "file" in e:
             assert (DATA_DIR / e["file"]).is_file(), f"missing {e['file']}"
+
+
+def test_page_text_drops_wordpress_menus():
+    html = (
+        '<body><div class="menu-main-container"><ul class="menu"><li>Loans</li></ul></div>'
+        "<p>Apply for an SS number online.</p></body>"
+    )
+    assert page_text(html) == "Apply for an SS number online."

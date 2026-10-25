@@ -84,34 +84,112 @@ class Answerer(Protocol):
     def answer(self, question: str, chunks: list[RetrievedChunk], lang: Lang) -> str: ...
 
 
-def make_retriever(session: Session, embedder: Embedder, top_k: int) -> Retriever:
-    columns = select(Chunk.content, Source.title, Source.url, Source.agency).join(Source)
+# Words that name an agency or a document only it issues, in English, Tagalog and Bisaya. When a
+# question mentions one, we search only that agency's sources. This matters because one large
+# source (the 1,500-chunk SSS Citizen's Charter) otherwise crowds out small ones in vector search.
+AGENCY_KEYWORDS: dict[str, list[str]] = {
+    "SSS": [r"\bsss\b", "social security", r"\bss (number|no)", "my.sss", r"\bumid\b"],
+    "PhilHealth": ["philhealth", r"\bpmrf\b"],
+    "Pag-IBIG Fund": [
+        "pag-ibig",
+        "pagibig",
+        "pag ibig",
+        r"\bhdmf\b",
+        r"\bmid (number|no)",
+        r"\bmp2\b",
+    ],
+    "PSA": [
+        r"\bpsa\b",
+        "birth certificate",
+        "marriage certificate",
+        "death certificate",
+        "cenomar",
+        "cenodeath",
+        "serbilis",
+        "philsys",
+        "national id",
+        "philid",
+        "birth cert",
+    ],
+    "NBI": [r"\bnbi\b"],
+    "LTO": [
+        r"\blto\b",
+        "driver",
+        "license",
+        "licence",
+        "lisensya",
+        "lisensiya",
+        "student permit",
+        r"\bmagmaneho\b",
+        r"\bpagmaneho\b",
+    ],
+    "DFA": [r"\bdfa\b", "passport", "pasaporte"],
+}
 
+# A page may contribute at most this many chunks, so several pages get a say.
+MAX_CHUNKS_PER_PAGE = 3
+
+
+def detect_agencies(question: str) -> set[str]:
+    q = question.lower()
+    return {
+        agency
+        for agency, patterns in AGENCY_KEYWORDS.items()
+        if any(re.search(p, q) for p in patterns)
+    }
+
+
+def diversify(ranked: list[RetrievedChunk], top_k: int) -> list[RetrievedChunk]:
+    """Keep the best-ranked chunks, but no more than MAX_CHUNKS_PER_PAGE from one page."""
+    picked: list[RetrievedChunk] = []
+    per_page: dict[str, int] = {}
+    for c in ranked:
+        if per_page.get(c.url, 0) < MAX_CHUNKS_PER_PAGE:
+            picked.append(c)
+            per_page[c.url] = per_page.get(c.url, 0) + 1
+            if len(picked) == top_k:
+                break
+    return picked
+
+
+def make_retriever(session: Session, embedder: Embedder, top_k: int) -> Retriever:
     def retrieve(question: str) -> list[RetrievedChunk]:
         [query_vec] = embedder.embed([question])
+        agencies = detect_agencies(question)
+        candidates = top_k * 4
         if session.get_bind().dialect.name == "sqlite":
-            return _rank_in_python(session, query_vec, top_k)
-        rows = session.execute(
-            columns.order_by(Chunk.embedding.cosine_distance(query_vec)).limit(top_k)
-        ).all()
-        return [RetrievedChunk(*row) for row in rows]
+            ranked = _rank_in_python(session, query_vec, candidates, agencies)
+        else:
+            query = select(Chunk.content, Source.title, Source.url, Source.agency).join(Source)
+            if agencies:
+                query = query.where(Source.agency.in_(agencies))
+            rows = session.execute(
+                query.order_by(Chunk.embedding.cosine_distance(query_vec)).limit(candidates)
+            ).all()
+            ranked = [RetrievedChunk(*row) for row in rows]
+        return diversify(ranked, top_k)
 
     return retrieve
 
 
-def _rank_in_python(session: Session, query_vec: list[float], top_k: int) -> list[RetrievedChunk]:
+def _rank_in_python(
+    session: Session, query_vec: list[float], limit: int, agencies: set[str]
+) -> list[RetrievedChunk]:
     """SQLite fallback for running without Postgres: score every chunk with numpy."""
     import numpy as np
 
-    rows = session.execute(
-        select(Chunk.embedding, Chunk.content, Source.title, Source.url, Source.agency).join(Source)
-    ).all()
+    query = select(Chunk.embedding, Chunk.content, Source.title, Source.url, Source.agency).join(
+        Source
+    )
+    if agencies:
+        query = query.where(Source.agency.in_(agencies))
+    rows = session.execute(query).all()
     if not rows:
         return []
     matrix = np.array([r[0] for r in rows], dtype=np.float32)
-    query = np.array(query_vec, dtype=np.float32)
-    scores = matrix @ query / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(query) + 1e-9)
-    best = np.argsort(-scores)[:top_k]
+    q = np.array(query_vec, dtype=np.float32)
+    scores = matrix @ q / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(q) + 1e-9)
+    best = np.argsort(-scores)[:limit]
     return [RetrievedChunk(*rows[i][1:]) for i in best]
 
 

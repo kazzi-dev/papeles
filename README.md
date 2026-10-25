@@ -131,24 +131,29 @@ Papeles only answers from official sources, listed in
 
 | Agency       | What's covered                                         | How it's loaded            |
 | ------------ | ------------------------------------------------------ | -------------------------- |
-| SSS          | My.SSS member account registration                     | Official PDF guide         |
+| SSS          | Getting an SS number, all services in the 2026 Citizen's Charter, My.SSS | Official page and PDFs |
 | PhilHealth   | Member Registration Form (PMRF); senior citizen coverage | Official PDF and web page |
 | Pag-IBIG     | Membership sign-up, MID number, updating/merging records | Checked summary           |
 | PSA          | Ordering birth/marriage/death certificates, CENOMAR    | Checked summary            |
 | NBI          | Online clearance registration and renewal              | Checked summary            |
 | PhilSys      | Contact details while the site is under maintenance    | Checked summary            |
+| LTO          | Student permit, new license, renewal, fees             | Checked summary (LTO Driver's Manual) |
 
 Many government sites block automated downloads or need JavaScript, so those agencies use short
 summaries checked against the official page, under
 [`apps/api/data/manual/`](apps/api/data/manual/README.md). Each one names its source page and
 the date it was last checked.
 
-**Not covered yet:** DFA passports and LTO licenses. Their sites block automated access, so
-someone needs to read the official pages and add summary files. The manual README explains how.
+**Not covered yet:** DFA passports. dfa.gov.ph blocks automated access, so someone needs to read
+the official page and add a summary file. The manual README explains how.
+
+When a question names an agency or one of its documents (e.g. "MID number" → Pag-IBIG,
+"license" → LTO), search is limited to that agency's sources, and no page may supply more than
+three chunks. Without this, the 1,500-chunk SSS Citizen's Charter crowds out the small pages.
 
 ## Roadmap
 
-- [ ] Add checked summaries for DFA passports and LTO licenses
+- [ ] Add a checked summary for DFA passports
 - [ ] Personal checklist: tick off documents you already have, saved per user
 - [ ] Office finder with hours and appointment links
 - [ ] Stream answers token by token

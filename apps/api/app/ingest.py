@@ -28,6 +28,9 @@ def page_text(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):
         tag.decompose()
+    # Site menus that aren't in <nav> (common on WordPress sites like sss.gov.ph).
+    for tag in soup.select('[role="navigation"], ul[class*="menu"], div[class*="menu"]'):
+        tag.decompose()
     main = soup.find("main") or soup.body or soup
     return main.get_text(" ", strip=True)
 
