@@ -42,3 +42,26 @@ def test_diversify_caps_chunks_per_page():
 def test_diversify_keeps_rank_order():
     ranked = [chunk("a", 0), chunk("b", 0), chunk("a", 1)]
     assert diversify(ranked, top_k=5) == ranked
+
+
+def test_python_ranking_skips_chunks_from_another_embedding_model():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.db import Base
+    from app.models import Chunk, Source
+    from app.rag import _rank_in_python
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        src = Source(slug="a", agency="SSS", title="t", url="u")
+        src.chunks = [
+            Chunk(content="new", embedding=[1.0, 0.0, 0.0]),
+            Chunk(content="old", embedding=[1.0, 0.0]),  # different length: skipped
+        ]
+        s.add(src)
+        s.commit()
+        ranked = _rank_in_python(s, [1.0, 0.0, 0.0], limit=5, agencies=set())
+
+    assert [c.content for c in ranked] == ["new"]

@@ -108,3 +108,88 @@ def test_groq_uses_default_endpoint_and_model(monkeypatch):
         rag.get_answerer.cache_clear()
     assert answerer._url == "https://api.groq.com/openai/v1/chat/completions"
     assert answerer._model == "openai/gpt-oss-120b"
+
+
+class FakeTime:
+    """A clock that only moves when the code under test sleeps."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+def gemini_with(handler, t: FakeTime, dims: int = 2):
+    from app.embeddings import GeminiEmbedder
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    return GeminiEmbedder("gkey", "gemini-embedding-001", dims, http, t.sleep, t.clock)
+
+
+def test_gemini_embedder_batches_and_sets_task_type():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append((request.headers["x-goog-api-key"], body))
+        vectors = [{"values": [1.0, 2.0]} for _ in body["requests"]]
+        return httpx.Response(200, json={"embeddings": vectors})
+
+    vectors = gemini_with(handler, FakeTime()).embed([f"t{i}" for i in range(150)], kind="query")
+
+    assert len(vectors) == 150 and vectors[0] == [1.0, 2.0]
+    assert [len(b["requests"]) for _, b in calls] == [90, 60]
+    first = calls[0][1]["requests"][0]
+    assert calls[0][0] == "gkey"
+    assert first["taskType"] == "RETRIEVAL_QUERY"
+    assert first["outputDimensionality"] == 2
+    assert first["model"] == "models/gemini-embedding-001"
+
+
+def test_gemini_embedder_paces_itself_under_the_per_minute_limit():
+    sent_at = []
+    t = FakeTime()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        n = len(json.loads(request.content)["requests"])
+        sent_at.append((t.now, n))
+        return httpx.Response(200, json={"embeddings": [{"values": [0.0]}] * n})
+
+    gemini_with(handler, t, dims=1).embed(["x"] * 200)
+
+    # No 60-second window may contain more than TEXTS_PER_MINUTE texts.
+    for start, _ in sent_at:
+        in_window = sum(n for when, n in sent_at if start <= when < start + 60)
+        assert in_window <= 90
+    assert sum(n for _, n in sent_at) == 200
+
+
+def test_gemini_embedder_uses_retry_delay_from_error_body():
+    t = FakeTime()
+    error = {"error": {"details": [{"@type": "RetryInfo", "retryDelay": "24s"}]}}
+    responses = iter(
+        [
+            httpx.Response(429, json=error),
+            httpx.Response(200, json={"embeddings": [{"values": [0.1]}]}),
+        ]
+    )
+    assert gemini_with(lambda r: next(responses), t, dims=1).embed(["x"]) == [[0.1]]
+    assert t.sleeps == [25.0]
+
+
+def test_gemini_embedder_stops_on_daily_quota_instead_of_waiting_hours():
+    from app.embeddings import QuotaExhausted
+
+    t = FakeTime()
+    error = {"error": {"details": [{"retryDelay": "47124s"}]}}
+    embedder = gemini_with(lambda r: httpx.Response(429, json=error), t, dims=1)
+
+    with pytest.raises(QuotaExhausted, match="13.1 hours"):
+        embedder.embed(["x"])
+    assert t.sleeps == []

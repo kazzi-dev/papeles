@@ -1,12 +1,12 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_session
-from app.embeddings import get_embedder
+from app.embeddings import QuotaExhausted, get_embedder
 from app.rag import (
     Answerer,
     Lang,
@@ -51,7 +51,14 @@ def ask(
     retrieve: Annotated[Retriever, Depends(get_retriever)],
     answerer: Annotated[Answerer, Depends(get_answerer)],
 ) -> AskResponse:
-    chunks = retrieve(body.question)
+    try:
+        chunks = retrieve(body.question)
+    except QuotaExhausted as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Search has reached its free daily limit. Please try again tomorrow.",
+            headers={"Retry-After": str(int(exc.retry_after))},
+        ) from exc
     answer = clean_citations(answerer.answer(body.question, chunks, body.lang))
 
     # One entry per page, numbered the same way the prompt numbered them, so [n] matches.

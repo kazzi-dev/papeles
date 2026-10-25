@@ -2,105 +2,95 @@
 
 | Part | Host | Cost |
 | --- | --- | --- |
-| API (`apps/api`) | Hugging Face Spaces, Docker | Free (CPU basic) |
-| Website (`apps/web`) | Vercel | Free (Hobby) |
+| API (`apps/api`) | Render, Docker web service (free plan, 512 MB) | Free |
+| Website (`apps/web`) | Vercel (Hobby) | Free |
 | AI answers | Groq free tier | Free |
-| Data | Built into the API image as SQLite | Free |
+| Search embeddings | Gemini API free tier | Free |
+| Data | `apps/api/data/index/`, loaded into SQLite when the image builds | Free |
 
-The API image downloads the official sources, embeds them and stores them in a SQLite file while
-it builds, so there is no database to run. Rebuilding the Space refreshes the data.
+Why it fits a free host: search embeddings come from Google's Gemini API instead of a model
+running on the server, and the search index is built once on a developer machine and committed,
+so the API needs well under 512 MB and calls Gemini only once per question.
+
+**Gemini free-tier limits:** 100 embeddings per minute and **1,000 per day** per Google Cloud
+project. Building the index uses about 550 of them (the ingest paces itself and stops with a
+clear message if the daily quota runs out). Each question on the live site uses one, so the site
+handles up to roughly 1,000 questions a day; after that it says search is at its daily limit
+until the quota resets.
 
 Do the API first: the website needs its URL.
 
-## 1. API on Hugging Face Spaces
+## 0. Keys you need
 
-### Create the Space
+- **Groq** (answers): https://console.groq.com/keys
+- **Gemini** (search): https://aistudio.google.com/apikey → **Create API key**. Free, no card.
 
-1. Sign up at https://huggingface.co (free).
-2. Go to https://huggingface.co/new-space.
-3. Fill in:
-   - **Space name:** `papeles-api`
-   - **License:** MIT (or leave empty)
-   - **SDK:** Docker → **Blank**
-   - **Hardware:** CPU basic (free)
-   - **Visibility:** Public
-4. Click **Create Space**.
+Keep both private. You paste them into Render yourself; never put them in the code.
 
-Your API's URL will be `https://<your-hf-name>-papeles-api.hf.space`. (Hugging Face lowercases it
-and turns `_` into `-`.)
+## 1. API on Render
 
-### Add your settings
+1. Sign up at https://render.com with your GitHub account.
+2. Go to https://dashboard.render.com/blueprints → **New Blueprint Instance** → connect
+   `kazzi-dev/papeles`. Render reads `render.yaml` from the repo.
+3. When it asks for the secret values:
+   - `LLM_API_KEY`: your Groq key
+   - `GEMINI_API_KEY`: your Gemini key
+4. Click **Apply**. The first build takes a few minutes.
+5. Your API's URL is shown on the service page, like `https://papeles-api.onrender.com`.
+   Open `<that URL>/health`; you should see `{"status":"ok"}`. `/docs` lets you try `/ask`.
 
-In the Space, open **Settings → Variables and secrets**:
+Render redeploys the API by itself whenever `apps/api` changes on `main`.
 
-| Type | Name | Value |
-| --- | --- | --- |
-| Secret | `LLM_API_KEY` | your Groq key (`gsk_...`) |
-| Variable | `LLM_PROVIDER` | `groq` |
-| Variable | `CORS_ORIGINS` | `["https://papeles.vercel.app"]` (your Vercel URL from step 2; you can update it later) |
-| Variable | `CORS_ORIGIN_REGEX` | `https://papeles(-[a-z0-9-]+)?\.vercel\.app` (lets Vercel preview links work too) |
+Free Render services sleep after 15 minutes without traffic; the next request wakes them in
+about a minute.
 
-Optional limits (defaults shown): `RATE_LIMIT_PER_MINUTE` = `5`, `RATE_LIMIT_PER_DAY` = `50` per
-visitor, and `GLOBAL_RATE_LIMIT_PER_MINUTE` = `20` for everyone together, which keeps you under
-Groq's free 30 requests per minute.
-
-Never put the key in the code or in a Variable; Variables are public.
-
-### Send the code to the Space
-
-The GitHub Action in `.github/workflows/deploy-api.yml` pushes `apps/api` to your Space on every
-push to `main` that changes it.
-
-1. On Hugging Face, go to https://huggingface.co/settings/tokens → **Create new token** →
-   type **Write** → name it `github-deploy` → create, and copy it.
-2. On GitHub, open the papeles repo → **Settings → Secrets and variables → Actions**:
-   - **Secrets** tab → **New repository secret**: name `HF_TOKEN`, value the token.
-   - **Variables** tab → **New repository variable**: name `HF_SPACE`, value
-     `<your-hf-name>/papeles-api`.
-3. Go to the **Actions** tab → **Deploy API to Hugging Face** → **Run workflow**.
-
-The Space starts building (watch the **Logs** tab on Hugging Face). The first build takes about
-5 to 10 minutes because it downloads the sources and the embedding model.
-
-### Check it
-
-Open `https://<your-hf-name>-papeles-api.hf.space/health`. You should see `{"status":"ok"}`.
-`/docs` lets you try `/ask` in the browser.
-
-If a source shows `skip` in the build log, that site refused the download from Hugging Face's
-servers; the rest still work.
+Optional limits (Render → service → **Environment**), defaults shown:
+`RATE_LIMIT_PER_MINUTE` = `5`, `RATE_LIMIT_PER_DAY` = `50` per visitor, and
+`GLOBAL_RATE_LIMIT_PER_MINUTE` = `20` for everyone together.
 
 ## 2. Website on Vercel
 
 1. Sign up at https://vercel.com with your GitHub account (free Hobby plan).
-2. Click **Add New → Project** and import `kazzi-dev/papeles`.
+2. **Add New → Project** → import `kazzi-dev/papeles`.
 3. Configure:
-   - **Root Directory:** click **Edit** and choose `apps/web`.
-   - **Framework Preset:** Next.js (detected automatically).
-   - **Environment Variables:** add `NEXT_PUBLIC_API_URL` =
-     `https://<your-hf-name>-papeles-api.hf.space` (no trailing slash).
-4. Click **Deploy**.
+   - **Root Directory:** **Edit** → `apps/web`.
+   - **Framework Preset:** Next.js (detected).
+   - **Environment Variables:** `NEXT_PUBLIC_API_URL` = your Render URL, no trailing slash.
+4. **Deploy**.
 
-To get a nicer address, open the project → **Settings → Domains** and change it to
-`papeles.vercel.app` if it's free (or any name you like).
-
-If you change `NEXT_PUBLIC_API_URL` later, redeploy (**Deployments → ⋯ → Redeploy**); it's built
-into the site.
+For a nicer address, open the project → **Settings → Domains** and use e.g. `papeles.vercel.app`
+if it's free. If you change `NEXT_PUBLIC_API_URL` later, redeploy; it's built into the site.
 
 ## 3. Connect them
 
-1. Put your final Vercel URL in the Space's `CORS_ORIGINS` variable, for example
-   `["https://papeles.vercel.app"]`. The Space restarts by itself.
+1. In Render → papeles-api → **Environment**, set `CORS_ORIGINS` to your Vercel URL, e.g.
+   `["https://papeles.vercel.app"]`, and save (Render restarts the service).
 2. Open your Vercel URL and ask a question.
-3. Add the link to the top of the README and to your GitHub profile.
+3. Add the link to the README and your GitHub profile.
+
+## Updating the sources
+
+The search index is built on your machine and committed, so after changing
+`apps/api/data/sources.yaml` or a file in `apps/api/data/manual/`:
+
+```bash
+cd apps/api
+# .env must have EMBEDDING_PROVIDER=gemini, GEMINI_API_KEY and a DATABASE_URL
+python -m app.ingest
+python -m app.snapshot export
+git add data/index && git commit -m "Refresh search index" && git push
+```
+
+Render rebuilds and serves the new index.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| Website says "Failed to fetch" | The Space is asleep (the first request after a while can take up to a minute) or `NEXT_PUBLIC_API_URL` is wrong. Open the `/health` URL to wake and check it. |
+| Website says "Failed to fetch" | The API is asleep (wait a minute and retry) or `NEXT_PUBLIC_API_URL` is wrong. Open `<API URL>/health`. |
 | Browser console shows a CORS error | Your Vercel URL isn't in `CORS_ORIGINS` or matched by `CORS_ORIGIN_REGEX`. |
-| "Too many questions right now" | The rate limit is working. Raise the limits in the Space variables if needed. |
-| "The free AI quota is used up" | Groq's free tier limit was reached; it resets within a minute (or daily for the daily cap). |
-| Answers have no written text, only sources | `LLM_API_KEY` is missing or wrong in the Space secrets. |
-| Action fails at "Push apps/api to the Space" | Check that `HF_TOKEN` has **Write** access and `HF_SPACE` is `name/space` exactly. |
+| "Too many questions right now" | The rate limit is working; raise the limits in Render's Environment if needed. |
+| "The free AI quota is used up" | Groq's free limit was reached; it resets within a minute (or daily). |
+| API returns 500 on every question | Check `GEMINI_API_KEY` in Render; search needs it. The service logs show the error. |
+| "Search has reached its free daily limit" | Gemini's 1,000-per-day quota is used up; it resets daily. |
+| Build fails with "different embedding settings" | The committed index was made with another embedding setup; re-run the ingest and export. |

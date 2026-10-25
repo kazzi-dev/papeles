@@ -154,7 +154,7 @@ def diversify(ranked: list[RetrievedChunk], top_k: int) -> list[RetrievedChunk]:
 
 def make_retriever(session: Session, embedder: Embedder, top_k: int) -> Retriever:
     def retrieve(question: str) -> list[RetrievedChunk]:
-        [query_vec] = embedder.embed([question])
+        [query_vec] = embedder.embed([question], kind="query")
         agencies = detect_agencies(question)
         candidates = top_k * 4
         if session.get_bind().dialect.name == "sqlite":
@@ -183,7 +183,9 @@ def _rank_in_python(
     )
     if agencies:
         query = query.where(Source.agency.in_(agencies))
-    rows = session.execute(query).all()
+    # Skip chunks embedded with a different model (e.g. while the index is being rebuilt after
+    # switching embedding providers) instead of failing the whole search.
+    rows = [r for r in session.execute(query).all() if len(r[0]) == len(query_vec)]
     if not rows:
         return []
     matrix = np.array([r[0] for r in rows], dtype=np.float32)

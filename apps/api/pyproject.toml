@@ -11,7 +11,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pgvector>=0.3",
     "anthropic>=1.0",
-    "fastembed>=0.4",
+    "numpy>=1.26",
     "httpx>=0.27",
     "beautifulsoup4>=4.12",
     "pypdf>=5.0",
@@ -19,6 +19,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Only for EMBEDDING_PROVIDER=local (runs the embedding model on the server, ~600 MB of memory).
+local = ["fastembed>=0.4"]
 dev = ["pytest>=8", "ruff>=0.7"]
 
 [build-system]

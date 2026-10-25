@@ -23,6 +23,11 @@ from app.models import Chunk, Source
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SOURCES_FILE = DATA_DIR / "sources.yaml"
 
+# Large chunks keep the count low (~700 for all sources), which matters because Gemini's free tier
+# allows 100 embeddings a minute. Five of them still fit easily in the answer prompt.
+CHUNK_SIZE = 2000
+CHUNK_OVERLAP = 200
+
 
 def page_text(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
@@ -71,7 +76,7 @@ def main() -> None:
                 print(f"skip {entry['slug']}: {exc}")
                 continue
 
-            pieces = chunk_text(text)
+            pieces = chunk_text(text, size=CHUNK_SIZE, overlap=CHUNK_OVERLAP)
             if not pieces:
                 print(f"skip {entry['slug']}: no text (page may need JavaScript; add a file)")
                 continue

@@ -120,3 +120,31 @@ def test_ask_returns_429_with_retry_after_when_rate_limited():
     assert blocked.status_code == 429
     assert "try again" in blocked.json()["detail"]
     assert int(blocked.headers["retry-after"]) >= 1
+
+
+def test_unexpected_errors_return_readable_json_with_cors_headers():
+    def broken_retriever(q):
+        raise RuntimeError("index is half rebuilt")
+
+    app.dependency_overrides[get_retriever] = lambda: broken_retriever
+    safe_client = TestClient(app, raise_server_exceptions=False)
+    res = safe_client.post(
+        "/ask", json={"question": "SSS?"}, headers={"Origin": "http://localhost:3000"}
+    )
+
+    assert res.status_code == 500
+    assert "Something went wrong" in res.json()["detail"]
+    assert res.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_ask_explains_when_search_quota_is_used_up():
+    from app.embeddings import QuotaExhausted
+
+    def out_of_quota(q):
+        raise QuotaExhausted(3600)
+
+    app.dependency_overrides[get_retriever] = lambda: out_of_quota
+    res = client.post("/ask", json={"question": "SSS?"})
+    assert res.status_code == 503
+    assert "daily limit" in res.json()["detail"]
+    assert res.headers["retry-after"] == "3600"

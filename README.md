@@ -26,7 +26,7 @@ English, and hard to search. Papeles puts it in one place and answers in your la
 ## How it works
 
 ```
-question ──► embed (multilingual, local) ──► pgvector similarity search
+question ──► embed (Gemini, multilingual) ──► vector similarity search
                                                      │
                                        top 5 official-page chunks
                                                      ▼
@@ -37,7 +37,8 @@ question ──► embed (multilingual, local) ──► pgvector similarity sea
 
 1. `python -m app.ingest` loads each source in [`apps/api/data/sources.yaml`](apps/api/data/sources.yaml)
    (an official web page, an official PDF, or a checked summary file), splits it into
-   overlapping chunks, embeds them, and stores them in the database.
+   overlapping chunks, embeds them, and stores them in the database. `python -m app.snapshot
+   export` saves that search index to `apps/api/data/index/`, which deploys load in seconds.
 2. A question is embedded with the same multilingual model, so a Tagalog or Bisaya question
    still matches English source text.
 3. The closest chunks go to the LLM with instructions to answer only from them, cite them,
@@ -66,7 +67,7 @@ Anthropic SDK.
 | ---------- | ----------------------------------------------------------- |
 | Web        | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS |
 | API        | FastAPI, Pydantic, SQLAlchemy 2                             |
-| Search     | PostgreSQL + pgvector, fastembed (multilingual MiniLM)      |
+| Search     | Gemini embeddings (or local fastembed), pgvector / SQLite   |
 | AI         | Groq / Gemini / OpenRouter (OpenAI format) or Claude        |
 | Tooling    | Docker Compose, GitHub Actions, pytest, Ruff, ESLint        |
 
@@ -102,8 +103,8 @@ npm run dev
 
 ## Deploy it (free)
 
-The API runs on Hugging Face Spaces (Docker, with the data built into the image as SQLite) and
-the website on Vercel. Per-visitor and global rate limits protect the shared free-tier AI key.
+The API runs on Render's free plan (Docker, with the search index built into the image as
+SQLite) and the website on Vercel. Per-visitor and global rate limits protect the shared free-tier AI key.
 Step-by-step guide: [docs/DEPLOY.md](docs/DEPLOY.md).
 
 ## Tests
@@ -126,7 +127,8 @@ apps/
       rag.py        retrieval + LLM answer (Groq/Gemini/OpenRouter/Claude)
       ingest.py     fetch → chunk → embed → store
       chunking.py
-      embeddings.py
+      embeddings.py Gemini or local embeddings
+      snapshot.py   save/load the search index (data/index/)
       models.py     sources, chunks (pgvector)
     data/sources.yaml   official pages to answer from
     tests/
@@ -173,7 +175,7 @@ three chunks. Without this, the 1,500-chunk SSS Citizen's Charter crowds out the
 - [ ] Stream answers token by token
 - [ ] Scheduled re-ingest so answers track requirement changes
 - [ ] Alembic migrations
-- [x] Free deployment setup (Vercel + Hugging Face Spaces), with rate limiting
+- [x] Free deployment setup (Vercel + Render), with rate limiting
 - [ ] Add the live demo link here once deployed
 
 ## Disclaimer

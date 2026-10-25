@@ -40,12 +40,21 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-opus-5-5"
     anthropic_effort: str = "low"  # short Q&A answers don't need deep reasoning
 
-    # Multilingual so Tagalog and Bisaya questions match English source pages.
+    # Embeddings power the search. Both options are multilingual, so Tagalog and Bisaya questions
+    # match English source pages. Switching provider means re-running the ingest.
+    #   gemini: Google's free API; tiny memory use, fits free hosts. Needs GEMINI_API_KEY.
+    #   local:  fastembed ONNX model on the server; no key, but ~600 MB of memory.
+    embedding_provider: Literal["gemini", "local"] = "gemini"
+    gemini_api_key: str = ""
+    gemini_embedding_model: str = "gemini-embedding-001"
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    embedding_dim: int = 384
-    # Where the embedding model is stored; empty = fastembed's default (the system temp dir).
+    # Where the local model is stored; empty = fastembed's default (the system temp dir).
     embedding_cache_dir: str = ""
     top_k: int = 5
+
+    @property
+    def embedding_dim(self) -> int:
+        return 768 if self.embedding_provider == "gemini" else 384
 
 
 @lru_cache
