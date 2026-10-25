@@ -3,11 +3,19 @@
 **Know exactly what to bring before you line up.**
 
 Papeles answers questions about Philippine government paperwork (SSS, PhilHealth, Pag-IBIG,
-PSA certificates, NBI clearance, PhilSys) in English, Tagalog or Bisaya. Every answer comes
-from official agency sources and links back to them. When the sources don't cover something,
-it says so instead of guessing.
+PSA certificates, NBI clearance, PhilSys, LTO licenses) in English, Tagalog or Bisaya. Ask
+"what do I need for X" and get a checklist and next steps, backed by official agency sources
+with links.
 
-> Live demo: _coming soon_  ·  Screenshots: _coming soon_
+<p align="center">
+  <img src="docs/screenshots/answer-lto.png" width="420" alt="Papeles answering how much a student permit costs, with cited LTO facts and a labeled general-guidance section">
+  &nbsp;
+  <img src="docs/screenshots/answer-pagibig.png" width="420" alt="Papeles answering in Tagalog how to recover a forgotten Pag-IBIG MID number">
+</p>
+
+Every answer has two parts: facts from official sources, each cited `[1]` and linked, then
+(only where the sources leave gaps) general guidance under an amber
+**"not from an official source, please verify"** label.
 
 ## Why I built this
 
@@ -109,7 +117,7 @@ apps/
     app/
       main.py       app + CORS + /health
       routers/      /ask endpoint
-      rag.py        retrieval + Claude answer
+      rag.py        retrieval + LLM answer (Groq/Gemini/OpenRouter/Claude)
       ingest.py     fetch → chunk → embed → store
       chunking.py
       embeddings.py
