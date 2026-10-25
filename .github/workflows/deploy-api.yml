@@ -1,0 +1,28 @@
+name: Deploy API to Hugging Face
+
+# Pushes apps/api to a Hugging Face Docker Space, which then rebuilds itself.
+# Does nothing until the repository variable HF_SPACE (e.g. "your-hf-name/papeles-api") and the
+# secret HF_TOKEN (a Hugging Face token with write access) are set. See docs/DEPLOY.md.
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/api/**"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: vars.HF_SPACE != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # subtree split needs the full history
+
+      - name: Push apps/api to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          git subtree split --prefix apps/api -b space
+          git push --force "https://${HF_SPACE%%/*}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" space:main

@@ -20,7 +20,10 @@ export async function ask(question: string, lang: Lang): Promise<AskResponse> {
     body: JSON.stringify({ question, lang }),
   });
   if (!res.ok) {
-    throw new Error(`The server answered ${res.status}. Please try again.`);
+    // The API explains rate limits and validation errors in `detail`; show that when present.
+    const body = await res.json().catch(() => null);
+    const detail = typeof body?.detail === "string" ? body.detail : null;
+    throw new Error(detail ?? `The server answered ${res.status}. Please try again.`);
   }
   return res.json();
 }

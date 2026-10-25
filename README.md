@@ -100,6 +100,12 @@ npm install
 npm run dev
 ```
 
+## Deploy it (free)
+
+The API runs on Hugging Face Spaces (Docker, with the data built into the image as SQLite) and
+the website on Vercel. Per-visitor and global rate limits protect the shared free-tier AI key.
+Step-by-step guide: [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Tests
 
 ```bash
@@ -167,7 +173,8 @@ three chunks. Without this, the 1,500-chunk SSS Citizen's Charter crowds out the
 - [ ] Stream answers token by token
 - [ ] Scheduled re-ingest so answers track requirement changes
 - [ ] Alembic migrations
-- [ ] Deploy (Vercel for web, Render/Fly for API, Neon or Supabase for Postgres)
+- [x] Free deployment setup (Vercel + Hugging Face Spaces), with rate limiting
+- [ ] Add the live demo link here once deployed
 
 ## Disclaimer
 

@@ -18,6 +18,7 @@ from app.rag import (
     group_by_page,
     make_retriever,
 )
+from app.ratelimit import rate_limit
 
 router = APIRouter()
 
@@ -43,7 +44,8 @@ def get_retriever(session: Annotated[Session, Depends(get_session)]) -> Retrieve
     return make_retriever(session, get_embedder(), get_settings().top_k)
 
 
-@router.post("/ask")
+# The rate limit runs first, so a blocked request never loads the model or calls the AI.
+@router.post("/ask", dependencies=[Depends(rate_limit)])
 def ask(
     body: AskRequest,
     retrieve: Annotated[Retriever, Depends(get_retriever)],

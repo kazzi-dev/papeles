@@ -15,7 +15,10 @@ services:
       retries: 10
 
   api:
-    build: ./apps/api
+    build:
+      context: ./apps/api
+      args:
+        BAKE_DATA: "false"  # data goes into Postgres instead; run app.ingest after startup
     environment:
       DATABASE_URL: postgresql+psycopg://papeles:papeles@db:5432/papeles
       LLM_PROVIDER: ${LLM_PROVIDER:-claude}
@@ -27,7 +30,7 @@ services:
       - "8000:8000"
     volumes:
       # Keep the downloaded embedding model between restarts.
-      - models:/tmp/fastembed_cache
+      - models:/app/models
     depends_on:
       db:
         condition: service_healthy

@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.rag import RetrievedChunk, build_user_message, get_answerer
+from app.ratelimit import RateLimiter, get_limiter
 from app.routers.ask import get_retriever
 
 CHUNKS = [
@@ -31,6 +32,7 @@ def fake_answerer():
     fake = FakeAnswerer()
     app.dependency_overrides[get_retriever] = lambda: lambda q: CHUNKS
     app.dependency_overrides[get_answerer] = lambda: fake
+    app.dependency_overrides[get_limiter] = lambda: RateLimiter(0, 0, 0)  # no limits
     yield fake
     app.dependency_overrides.clear()
 
@@ -107,3 +109,14 @@ def test_ask_lists_all_sources_without_ai_key():
     app.dependency_overrides[get_answerer] = lambda: SourcesOnlyAnswerer()
     sources = client.post("/ask", json={"question": "passport?"}).json()["sources"]
     assert [s["n"] for s in sources] == [1]
+
+
+def test_ask_returns_429_with_retry_after_when_rate_limited():
+    app.dependency_overrides[get_limiter] = lambda: limiter
+    limiter = RateLimiter(per_minute=1, per_day=0, global_per_minute=0)
+
+    assert client.post("/ask", json={"question": "SSS?"}).status_code == 200
+    blocked = client.post("/ask", json={"question": "SSS again?"})
+    assert blocked.status_code == 429
+    assert "try again" in blocked.json()["detail"]
+    assert int(blocked.headers["retry-after"]) >= 1

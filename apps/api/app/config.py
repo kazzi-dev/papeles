@@ -19,6 +19,15 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://papeles:papeles@localhost:5432/papeles"
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Also allow origins matching this regex, e.g. Vercel preview URLs:
+    # https://papeles(-[a-z0-9-]+)?\.vercel\.app
+    cors_origin_regex: str = ""
+
+    # Rate limits on /ask, protecting a shared free-tier AI key on a public deployment.
+    # 0 turns a limit off.
+    rate_limit_per_minute: int = 5  # per visitor
+    rate_limit_per_day: int = 50  # per visitor
+    global_rate_limit_per_minute: int = 20  # all visitors together, under Groq's free 30/min
 
     # Which model writes the answers. Without a key the API still runs and returns sources.
     llm_provider: Provider = "claude"
@@ -34,6 +43,8 @@ class Settings(BaseSettings):
     # Multilingual so Tagalog and Bisaya questions match English source pages.
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_dim: int = 384
+    # Where the embedding model is stored; empty = fastembed's default (the system temp dir).
+    embedding_cache_dir: str = ""
     top_k: int = 5
 
 
