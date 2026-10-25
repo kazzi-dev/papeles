@@ -1,0 +1,35 @@
+# Official pages Papeles answers from. Start with each agency's homepage, then replace
+# these with the exact requirements pages (deep links answer far better than homepages).
+sources:
+  - slug: dfa-passport
+    agency: DFA
+    title: Passport appointment and requirements
+    url: https://www.passport.gov.ph/
+  - slug: nbi-clearance
+    agency: NBI
+    title: NBI clearance online application
+    url: https://clearance.nbi.gov.ph/
+  - slug: philsys-id
+    agency: PSA
+    title: Philippine Identification System (PhilSys)
+    url: https://philsys.gov.ph/
+  - slug: psa-civil-registry
+    agency: PSA
+    title: Birth, marriage and death certificates
+    url: https://psa.gov.ph/
+  - slug: sss
+    agency: SSS
+    title: Social Security System membership and benefits
+    url: https://www.sss.gov.ph/
+  - slug: philhealth
+    agency: PhilHealth
+    title: PhilHealth membership
+    url: https://www.philhealth.gov.ph/
+  - slug: pagibig
+    agency: Pag-IBIG Fund
+    title: Pag-IBIG membership and loans
+    url: https://www.pagibigfund.gov.ph/
+  - slug: lto-license
+    agency: LTO
+    title: Driver's license and vehicle registration
+    url: https://lto.gov.ph/
