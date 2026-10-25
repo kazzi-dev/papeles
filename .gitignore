@@ -13,3 +13,6 @@ node_modules/
 .next/
 
 .DS_Store
+
+# Local SQLite database (no-Docker mode)
+*.db

@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Answer } from "@/components/answer";
 import { ask, LANGS, type AskResponse, type Lang } from "@/lib/api";
 
 const EXAMPLES = [
@@ -90,13 +91,13 @@ export function AskBox() {
 
       {result && (
         <section aria-live="polite" className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="whitespace-pre-wrap leading-7">{result.answer}</p>
+          <Answer text={result.answer} />
           {result.sources.length > 0 && (
             <div>
               <h2 className="mb-2 text-sm font-semibold text-zinc-500">Sources</h2>
               <ol className="list-decimal space-y-1 pl-5 text-sm">
-                {result.sources.map((s) => (
-                  <li key={s.url}>
+                {result.sources.map((s, i) => (
+                  <li key={s.url} id={`source-${i + 1}`} className="scroll-mt-4">
                     <a href={s.url} target="_blank" rel="noreferrer" className="text-blue-700 underline dark:text-blue-400">
                       {s.agency}: {s.title}
                     </a>

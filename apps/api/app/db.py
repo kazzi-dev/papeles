@@ -26,9 +26,11 @@ def init_db() -> None:
     # Imported for its side effect of registering tables on Base.metadata.
     from app import models  # noqa: F401
 
-    with get_engine().begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-    Base.metadata.create_all(get_engine())
+    engine = get_engine()
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    Base.metadata.create_all(engine)
 
 
 def get_session() -> Iterator[Session]:

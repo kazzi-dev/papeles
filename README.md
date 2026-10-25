@@ -21,7 +21,7 @@ question ──► embed (multilingual, local) ──► pgvector similarity sea
                                                      │
                                        top 5 official-page chunks
                                                      ▼
-                     Claude answers ONLY from those chunks, citing [1], [2] ...
+              the LLM answers ONLY from those chunks, citing [1], [2] ...
                                                      ▼
                                     answer + source links ──► web
 ```
@@ -30,8 +30,25 @@ question ──► embed (multilingual, local) ──► pgvector similarity sea
    splits it into overlapping chunks, embeds them, and stores them in Postgres.
 2. A question is embedded with the same multilingual model, so a Tagalog or Bisaya question
    still matches English source text.
-3. The closest chunks go to Claude with instructions to answer only from them, cite them,
+3. The closest chunks go to the LLM with instructions to answer only from them, cite them,
    and say so when the sources don't cover the question.
+
+### Pick your AI provider
+
+Set `LLM_PROVIDER` and `LLM_API_KEY` in `.env`. Groq, Gemini and OpenRouter have free tiers
+that need no credit card. Without a key, Papeles still runs and shows the matching official
+pages, just without a written answer.
+
+| `LLM_PROVIDER` | Default model                            | Get a key                                 |
+| -------------- | ---------------------------------------- | ----------------------------------------- |
+| `groq`         | `openai/gpt-oss-120b`                    | https://console.groq.com/keys (free)      |
+| `gemini`       | `gemini-flash-latest`                    | https://aistudio.google.com/apikey (free) |
+| `openrouter`   | `meta-llama/llama-3.3-70b-instruct:free` | https://openrouter.ai/keys (free models)  |
+| `claude`       | `claude-opus-5-5`                        | https://console.anthropic.com (paid)      |
+
+Override the model with `LLM_MODEL`. Groq, Gemini and OpenRouter all speak the OpenAI chat
+format, so one client in [`rag.py`](apps/api/app/rag.py) covers them; Claude uses the
+Anthropic SDK.
 
 ## Stack
 
@@ -40,15 +57,15 @@ question ──► embed (multilingual, local) ──► pgvector similarity sea
 | Web        | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS |
 | API        | FastAPI, Pydantic, SQLAlchemy 2                             |
 | Search     | PostgreSQL + pgvector, fastembed (multilingual MiniLM)      |
-| AI         | Claude API (Anthropic Python SDK)                           |
+| AI         | Groq / Gemini / OpenRouter (OpenAI format) or Claude        |
 | Tooling    | Docker Compose, GitHub Actions, pytest, Ruff, ESLint        |
 
 ## Run it locally
 
-You need Docker and an [Anthropic API key](https://console.anthropic.com).
+You need Docker and a free [Groq API key](https://console.groq.com/keys) (or any provider above).
 
 ```bash
-cp .env.example .env          # then paste your ANTHROPIC_API_KEY
+cp .env.example .env          # then paste your LLM_API_KEY
 docker compose up --build -d
 docker compose exec api python -m app.ingest   # load the official pages
 ```
@@ -56,6 +73,9 @@ docker compose exec api python -m app.ingest   # load the official pages
 Open http://localhost:3000. API docs are at http://localhost:8000/docs.
 
 ### Without Docker (for development)
+
+Set `DATABASE_URL=sqlite:///apps/api/papeles.db` in `.env` to skip Postgres entirely
+(search then runs in Python, fine for a few hundred chunks), or start just the database:
 
 ```bash
 docker compose up -d db
@@ -73,7 +93,7 @@ npm run dev
 ## Tests
 
 ```bash
-cd apps/api && pytest        # API, no database or API key needed
+cd apps/api && pytest        # API, no database, network or API key needed
 cd apps/web && npm run lint && npm run typecheck
 ```
 

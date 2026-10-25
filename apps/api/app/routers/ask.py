@@ -7,7 +7,15 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_session
 from app.embeddings import get_embedder
-from app.rag import Answerer, Lang, Retriever, get_answerer, make_retriever
+from app.rag import (
+    Answerer,
+    Lang,
+    Retriever,
+    clean_citations,
+    get_answerer,
+    group_by_page,
+    make_retriever,
+)
 
 router = APIRouter()
 
@@ -39,10 +47,11 @@ def ask(
     answerer: Annotated[Answerer, Depends(get_answerer)],
 ) -> AskResponse:
     chunks = retrieve(body.question)
-    answer = answerer.answer(body.question, chunks, body.lang)
+    answer = clean_citations(answerer.answer(body.question, chunks, body.lang))
 
-    # Several chunks often come from the same page; list each page once, in citation order.
-    seen: dict[str, SourceOut] = {}
-    for c in chunks:
-        seen.setdefault(c.url, SourceOut(title=c.title, url=c.url, agency=c.agency))
-    return AskResponse(answer=answer, sources=list(seen.values()))
+    # One entry per page, in the same order the prompt numbered them, so [n] matches.
+    sources = [
+        SourceOut(title=group[0].title, url=url, agency=group[0].agency)
+        for url, group in group_by_page(chunks).items()
+    ]
+    return AskResponse(answer=answer, sources=sources)

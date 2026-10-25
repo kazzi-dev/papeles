@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import get_settings
@@ -33,6 +33,9 @@ class Chunk(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"))
     content: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list[float]] = mapped_column(Vector(get_settings().embedding_dim))
+    # Plain JSON on SQLite, for running locally without Postgres (see rag._rank_in_python).
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(get_settings().embedding_dim).with_variant(JSON(), "sqlite")
+    )
 
     source: Mapped[Source] = relationship(back_populates="chunks")

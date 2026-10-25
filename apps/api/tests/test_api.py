@@ -54,8 +54,32 @@ def test_ask_rejects_unknown_language():
     assert res.status_code == 422
 
 
-def test_user_message_numbers_sources_and_sets_language():
-    msg = build_user_message("How?", CHUNKS, "ceb")
-    assert "[1] DFA - Passport" in msg
-    assert "[2] DFA - Passport" in msg
+def test_user_message_numbers_by_page_and_sets_language():
+    other = RetrievedChunk("Pay online.", "NBI clearance", "https://b.gov.ph/n", "NBI")
+    msg = build_user_message("How?", [*CHUNKS, other], "ceb")
+
+    # Both passport chunks share one number, so [n] matches the n-th listed source.
+    assert "[1] DFA - Passport (https://a.gov.ph/p)" in msg
+    assert "Bring a PSA birth certificate." in msg and "Appointments are online." in msg
+    assert "[2] NBI - NBI clearance" in msg
+    assert "[3]" not in msg
     assert msg.endswith("Answer in Bisaya (Cebuano).")
+
+
+def test_ask_cleans_model_specific_citations(fake_answerer):
+    fake_answerer.answer = lambda q, c, lang: "Use My.SSS 【1†L1-L4】 and pay 【2】."
+    res = client.post("/ask", json={"question": "SSS?"})
+    assert res.json()["answer"] == "Use My.SSS [1] and pay [2]."
+
+
+def test_clean_citations_leaves_normal_text_alone():
+    from app.rag import clean_citations
+
+    text = "Bring 2 IDs [1]. Fee is PHP 950 (as of 2026)."
+    assert clean_citations(text) == text
+
+
+def test_sources_only_answerer_explains_missing_key():
+    from app.rag import SourcesOnlyAnswerer
+
+    assert "LLM_API_KEY" in SourcesOnlyAnswerer().answer("q", CHUNKS, "en")
