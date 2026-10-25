@@ -1,4 +1,4 @@
-import { Children, isValidElement, type ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import Markdown, { type Components } from "react-markdown";
 
 // Must match GENERAL_HEADING in apps/api/app/rag.py. Everything under this heading comes from
@@ -12,11 +12,21 @@ function textOf(node: ReactNode): string {
   return "";
 }
 
+// Models write the heading as bold text, a Markdown heading, or bold with a trailing line
+// break, so match on the text rather than the exact element structure.
 function isGeneralHeading(children: ReactNode): boolean {
-  const only = Children.toArray(children);
-  if (only.length !== 1 || !isValidElement(only[0]) || only[0].type !== "strong") return false;
-  const text = textOf(only[0]).trim();
-  return GENERAL_PREFIXES.some((p) => text.startsWith(p));
+  const text = textOf(children).trim();
+  return text.length < 120 && GENERAL_PREFIXES.some((p) => text.startsWith(p));
+}
+
+function Block({ children, className }: { children: ReactNode; className: string }) {
+  return isGeneralHeading(children) ? (
+    <p className="mt-5 mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      ⚠ {children}
+    </p>
+  ) : (
+    <p className={className}>{children}</p>
+  );
 }
 
 // Turn bare citations like [2] into links to the matching entry in the sources list.
@@ -25,21 +35,16 @@ function linkCitations(text: string): string {
 }
 
 const components: Components = {
-  p: ({ children }) =>
-    isGeneralHeading(children) ? (
-      <p className="mt-5 mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-        ⚠ {children}
-      </p>
-    ) : (
-      <p className="mb-3 last:mb-0">{children}</p>
-    ),
+  p: ({ children }) => <Block className="mb-3 last:mb-0">{children}</Block>,
   ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>,
   ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5">{children}</ol>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
   // Answers are short; keep any heading the model writes at body size.
-  h1: ({ children }) => <p className="mb-2 font-semibold">{children}</p>,
-  h2: ({ children }) => <p className="mb-2 font-semibold">{children}</p>,
-  h3: ({ children }) => <p className="mb-2 font-semibold">{children}</p>,
+  h1: ({ children }) => <Block className="mb-2 font-semibold">{children}</Block>,
+  h2: ({ children }) => <Block className="mb-2 font-semibold">{children}</Block>,
+  h3: ({ children }) => <Block className="mb-2 font-semibold">{children}</Block>,
+  h4: ({ children }) => <Block className="mb-2 font-semibold">{children}</Block>,
+  hr: () => <hr className="my-4 border-zinc-200 dark:border-zinc-800" />,
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-l-2 border-zinc-300 pl-3 text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
       {children}
