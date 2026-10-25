@@ -15,9 +15,12 @@ from app.rag import (
 CHUNKS = [RetrievedChunk("Register online at My.SSS.", "SSS", "https://sss.gov.ph", "SSS")]
 
 
-def answerer_with(handler) -> OpenAICompatibleAnswerer:
+def answerer_with(handler, sleeps=None) -> OpenAICompatibleAnswerer:
     http = httpx.Client(transport=httpx.MockTransport(handler))
-    return OpenAICompatibleAnswerer("https://api.example.com/v1/", "test-key", "some-model", http)
+    sleep = sleeps.append if sleeps is not None else lambda s: None
+    return OpenAICompatibleAnswerer(
+        "https://api.example.com/v1/", "test-key", "some-model", http, sleep
+    )
 
 
 def test_openai_compatible_sends_chat_request_and_reads_answer():
@@ -38,12 +41,37 @@ def test_openai_compatible_sends_chat_request_and_reads_answer():
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["model"] == "some-model"
     assert seen["body"]["messages"][0]["role"] == "system"
-    assert seen["body"]["messages"][1]["content"].endswith("Answer in Tagalog.")
+    user_msg = seen["body"]["messages"][1]["content"]
+    assert user_msg.endswith("Answer in Tagalog.")
+    assert "**Pangkalahatang gabay" in user_msg
 
 
-def test_openai_compatible_explains_rate_limit():
-    answer = answerer_with(lambda r: httpx.Response(429)).answer("q", CHUNKS, "en")
+def test_openai_compatible_explains_rate_limit_after_retries():
+    sleeps = []
+    answer = answerer_with(lambda r: httpx.Response(429), sleeps).answer("q", CHUNKS, "en")
     assert "quota" in answer
+    assert len(sleeps) == OpenAICompatibleAnswerer.MAX_RETRIES
+
+
+def test_openai_compatible_waits_out_short_rate_limit():
+    responses = iter(
+        [
+            httpx.Response(429, headers={"retry-after": "3"}),
+            httpx.Response(200, json={"choices": [{"message": {"content": "Done [1]."}}]}),
+        ]
+    )
+    sleeps = []
+    answer = answerer_with(lambda r: next(responses), sleeps).answer("q", CHUNKS, "en")
+    assert answer == "Done [1]."
+    assert sleeps == [3.0]
+
+
+def test_openai_compatible_gives_up_on_long_rate_limit():
+    sleeps = []
+    long_wait = httpx.Response(429, headers={"retry-after": "120"})
+    answer = answerer_with(lambda r: long_wait, sleeps).answer("q", CHUNKS, "en")
+    assert "quota" in answer
+    assert sleeps == []
 
 
 def test_openai_compatible_raises_on_other_errors():

@@ -1,4 +1,23 @@
+import { Children, isValidElement, type ReactNode } from "react";
 import Markdown, { type Components } from "react-markdown";
+
+// Must match GENERAL_HEADING in apps/api/app/rag.py. Everything under this heading comes from
+// the model's general knowledge, not an official source, so it gets a warning style.
+const GENERAL_PREFIXES = ["General guidance", "Pangkalahatang gabay", "Kinatibuk-ang giya"];
+
+function textOf(node: ReactNode): string {
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
+  return "";
+}
+
+function isGeneralHeading(children: ReactNode): boolean {
+  const only = Children.toArray(children);
+  if (only.length !== 1 || !isValidElement(only[0]) || only[0].type !== "strong") return false;
+  const text = textOf(only[0]).trim();
+  return GENERAL_PREFIXES.some((p) => text.startsWith(p));
+}
 
 // Turn bare citations like [2] into links to the matching entry in the sources list.
 function linkCitations(text: string): string {
@@ -6,7 +25,14 @@ function linkCitations(text: string): string {
 }
 
 const components: Components = {
-  p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+  p: ({ children }) =>
+    isGeneralHeading(children) ? (
+      <p className="mt-5 mb-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+        ⚠ {children}
+      </p>
+    ) : (
+      <p className="mb-3 last:mb-0">{children}</p>
+    ),
   ul: ({ children }) => <ul className="mb-3 list-disc space-y-1 pl-5">{children}</ul>,
   ol: ({ children }) => <ol className="mb-3 list-decimal space-y-1 pl-5">{children}</ol>,
   strong: ({ children }) => <strong className="font-semibold">{children}</strong>,

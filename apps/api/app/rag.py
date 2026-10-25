@@ -1,4 +1,6 @@
 import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal, Protocol
@@ -16,22 +18,43 @@ Lang = Literal["en", "tl", "ceb"]
 
 LANG_NAMES: dict[Lang, str] = {"en": "English", "tl": "Tagalog", "ceb": "Bisaya (Cebuano)"}
 
+# Heading for the part of an answer that comes from the model's general knowledge. Fixed per
+# language so the web app can recognise and style it.
+GENERAL_HEADING: dict[Lang, str] = {
+    "en": "General guidance (not from an official source, please verify)",
+    "tl": "Pangkalahatang gabay (hindi mula sa opisyal na source, paki-verify)",
+    "ceb": "Kinatibuk-ang giya (dili gikan sa opisyal nga source, palihug i-verify)",
+}
+
 SYSTEM_PROMPT = """You are Papeles, a helper for Filipinos dealing with government paperwork \
 (passport, NBI clearance, PhilSys ID, SSS, PhilHealth, Pag-IBIG, LTO, PSA documents).
 
-Use only the numbered sources in the user's message. People will act on your answer, so a \
-requirement that isn't really required costs them a wasted trip:
-- Every requirement, step, fee and deadline you list must be stated in the sources. Do not add \
-items from general knowledge, even ones that are commonly required elsewhere.
-- End each item with its citation in square brackets, like [1] or [2].
-- If the sources cover only part of the question, answer that part and say plainly what they \
-don't cover. If they cover none of it, say so and point to the agency's official site.
-- For anything the sources don't cover, don't describe what the agency probably requires or \
-lists, not even as examples.
+Your job is to actually answer: someone asking "what do I need for X" should finish reading \
+with a usable checklist and next steps, not a link to go and find out themselves.
+
+Write the answer in up to two parts:
+
+1. What the numbered sources say. Every item here must be stated in the sources and end with \
+its citation in square brackets, like [1] or [2]. Leave this part out if the sources don't \
+help with the question.
+
+2. If the sources leave gaps for what the person needs (for example which valid IDs are \
+accepted, the documents to bring, the usual steps), fill them from your general knowledge of \
+Philippine government processes, under the exact bold heading given in the user's message. \
+Items in this part have no citations. In this part:
+- Do not state phone numbers, email addresses, URLs, exact fee amounts, processing times, or \
+form numbers and codes (like "Form 5"); say where to check them instead.
+- Include only what is widely known and has been stable for years. Leave out anything you are \
+unsure of; a shorter list is better than a wrong item.
+- Keep it to the essentials: at most about 6 checklist items and 6 steps.
+- Many agencies have moved registration online; don't send people to a branch for something \
+that is usually done online.
+
+Never move general-knowledge items into part 1, and never cite them.
 
 Format in Markdown: a bulleted checklist for requirements, numbered steps for a process, short \
-paragraphs otherwise. No headings larger than bold text. Requirements and fees change, so remind \
-the user to confirm with the agency when you mention a fee or a deadline."""
+paragraphs otherwise. No headings larger than bold text. Keep it concise. End with one short \
+line reminding the user that requirements and fees change, so confirm with the agency."""
 
 # Some models (e.g. gpt-oss) cite as 【1†L1-L4】 or 【1】 instead of [1].
 _FANCY_CITATION = re.compile(r"【\s*(\d+)[^】]*】")
@@ -112,7 +135,9 @@ def build_user_message(question: str, chunks: list[RetrievedChunk], lang: Lang) 
     )
     return (
         f"<sources>\n{sources or '(no matching sources)'}\n</sources>\n\n"
-        f"Question: {question}\n\nAnswer in {LANG_NAMES[lang]}."
+        f"Question: {question}\n\n"
+        f"Heading for general guidance, if needed: **{GENERAL_HEADING[lang]}**\n\n"
+        f"Answer in {LANG_NAMES[lang]}."
     )
 
 
@@ -141,29 +166,49 @@ class ClaudeAnswerer:
 class OpenAICompatibleAnswerer:
     """Any provider that speaks the OpenAI chat completions format: Groq, Gemini, OpenRouter."""
 
-    def __init__(self, base_url: str, api_key: str, model: str, http: httpx.Client | None = None):
+    # Free tiers have tight per-minute limits; wait out short ones rather than failing.
+    MAX_RETRIES = 2
+    MAX_WAIT_SECONDS = 20.0
+
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        http: httpx.Client | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._headers = {"Authorization": f"Bearer {api_key}"}
         self._model = model
         self._http = http or httpx.Client(timeout=60)
+        self._sleep = sleep
 
     def answer(self, question: str, chunks: list[RetrievedChunk], lang: Lang) -> str:
-        resp = self._http.post(
-            self._url,
-            headers=self._headers,
-            json={
-                "model": self._model,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": build_user_message(question, chunks, lang)},
-                ],
-            },
-        )
-        if resp.status_code == 429:
-            # Free tiers have tight per-minute and per-day limits.
-            return "The free AI quota is used up for now. Please try again in a minute."
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"] or ""
+        body = {
+            "model": self._model,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": build_user_message(question, chunks, lang)},
+            ],
+        }
+        for attempt in range(self.MAX_RETRIES + 1):
+            resp = self._http.post(self._url, headers=self._headers, json=body)
+            if resp.status_code != 429:
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"] or ""
+            wait = _retry_after_seconds(resp)
+            if attempt == self.MAX_RETRIES or wait > self.MAX_WAIT_SECONDS:
+                break
+            self._sleep(wait)
+        return "The free AI quota is used up for now. Please try again in a minute."
+
+
+def _retry_after_seconds(resp: httpx.Response) -> float:
+    try:
+        return float(resp.headers.get("retry-after", "5"))
+    except ValueError:
+        return 5.0
 
 
 class SourcesOnlyAnswerer:
