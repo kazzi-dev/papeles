@@ -144,7 +144,7 @@ def test_gemini_embedder_batches_and_sets_task_type():
     vectors = gemini_with(handler, FakeTime()).embed([f"t{i}" for i in range(150)], kind="query")
 
     assert len(vectors) == 150 and vectors[0] == [1.0, 2.0]
-    assert [len(b["requests"]) for _, b in calls] == [90, 60]
+    assert [len(b["requests"]) for _, b in calls] == [40, 40, 40, 30]
     first = calls[0][1]["requests"][0]
     assert calls[0][0] == "gkey"
     assert first["taskType"] == "RETRIEVAL_QUERY"
@@ -153,6 +153,8 @@ def test_gemini_embedder_batches_and_sets_task_type():
 
 
 def test_gemini_embedder_paces_itself_under_the_per_minute_limit():
+    from app.embeddings import GeminiEmbedder
+
     sent_at = []
     t = FakeTime()
 
@@ -166,7 +168,7 @@ def test_gemini_embedder_paces_itself_under_the_per_minute_limit():
     # No 60-second window may contain more than TEXTS_PER_MINUTE texts.
     for start, _ in sent_at:
         in_window = sum(n for when, n in sent_at if start <= when < start + 60)
-        assert in_window <= 90
+        assert in_window <= GeminiEmbedder.TEXTS_PER_MINUTE
     assert sum(n for _, n in sent_at) == 200
 
 
@@ -193,3 +195,54 @@ def test_gemini_embedder_stops_on_daily_quota_instead_of_waiting_hours():
     with pytest.raises(QuotaExhausted, match="13.1 hours"):
         embedder.embed(["x"])
     assert t.sleeps == []
+
+
+def test_gemini_embedder_paces_by_tokens_for_long_texts():
+    from app.embeddings import GeminiEmbedder
+
+    sent = []
+    t = FakeTime()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        texts = [r["content"]["parts"][0]["text"] for r in json.loads(request.content)["requests"]]
+        sent.append((t.now, sum(GeminiEmbedder.estimate_tokens(x) for x in texts)))
+        return httpx.Response(200, json={"embeddings": [{"values": [0.0]}] * len(texts)})
+
+    gemini_with(handler, t, dims=1).embed(["x" * 2000] * 60)  # ~667 tokens each
+
+    for start, _ in sent:
+        tokens = sum(k for when, k in sent if start <= when < start + 60)
+        assert tokens <= GeminiEmbedder.TOKENS_PER_MINUTE
+
+
+def test_cached_embedder_resumes_without_re_embedding():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.db import Base
+    from app.embeddings import CachedEmbedder
+
+    class CountingEmbedder:
+        def __init__(self, fail_after=None):
+            self.calls = 0
+            self.fail_after = fail_after
+
+        def embed(self, texts, kind="document"):
+            self.calls += 1
+            if self.fail_after is not None and self.calls > self.fail_after:
+                raise RuntimeError("quota")
+            return [[float(len(x))] for x in texts]
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    texts = [f"chunk {i}" for i in range(10)]
+    with Session(engine) as s:
+        flaky = CountingEmbedder(fail_after=1)
+        with pytest.raises(RuntimeError):
+            CachedEmbedder(flaky, "m", s, batch_size=4).embed(texts)  # first 4 get saved
+
+        fresh = CountingEmbedder()
+        out = CachedEmbedder(fresh, "m", s, batch_size=4).embed(texts)
+
+    assert out == [[float(len(x))] for x in texts]
+    assert fresh.calls == 2  # only the 6 missing texts, in batches of 4

@@ -17,7 +17,7 @@ from sqlalchemy import delete, select
 
 from app.chunking import chunk_text
 from app.db import get_sessionmaker, init_db
-from app.embeddings import get_embedder
+from app.embeddings import CachedEmbedder, QuotaExhausted, embedding_model_id, get_embedder
 from app.models import Chunk, Source
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -62,9 +62,9 @@ def load_text(entry: dict, http: httpx.Client, data_dir: Path = DATA_DIR) -> str
 def main() -> None:
     init_db()
     entries = yaml.safe_load(SOURCES_FILE.read_text(encoding="utf-8"))["sources"]
-    embedder = get_embedder()
 
     with httpx.Client(timeout=60, follow_redirects=True) as http, get_sessionmaker()() as session:
+        embedder = CachedEmbedder(get_embedder(), embedding_model_id(), session)
         # Drop sources that were removed from sources.yaml.
         session.execute(delete(Source).where(Source.slug.not_in([e["slug"] for e in entries])))
         session.commit()
@@ -80,7 +80,13 @@ def main() -> None:
             if not pieces:
                 print(f"skip {entry['slug']}: no text (page may need JavaScript; add a file)")
                 continue
-            vectors = embedder.embed(pieces)
+            try:
+                vectors = embedder.embed(pieces)
+            except QuotaExhausted as exc:
+                # Everything embedded so far is cached; running the ingest again resumes here.
+                raise SystemExit(
+                    f"stopped at {entry['slug']}: {exc}. Run again later to resume."
+                ) from exc
 
             source = session.scalar(select(Source).where(Source.slug == entry["slug"]))
             if source is None:

@@ -65,3 +65,20 @@ def test_python_ranking_skips_chunks_from_another_embedding_model():
         ranked = _rank_in_python(s, [1.0, 0.0, 0.0], limit=5, agencies=set())
 
     assert [c.content for c in ranked] == ["new"]
+
+
+def test_retriever_skips_embedding_when_index_is_empty():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from app.db import Base
+    from app.rag import make_retriever
+
+    class MustNotEmbed:
+        def embed(self, texts, kind="document"):
+            raise AssertionError("no embedding call expected for an empty index")
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as s:
+        assert make_retriever(s, MustNotEmbed(), top_k=5)("Paano kumuha ng SSS number?") == []

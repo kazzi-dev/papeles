@@ -154,6 +154,10 @@ def diversify(ranked: list[RetrievedChunk], top_k: int) -> list[RetrievedChunk]:
 
 def make_retriever(session: Session, embedder: Embedder, top_k: int) -> Retriever:
     def retrieve(question: str) -> list[RetrievedChunk]:
+        # With no index loaded yet (e.g. a fresh deploy) there's nothing to search, so don't
+        # spend an embedding call; answers fall back to the labeled general guidance.
+        if session.scalar(select(Chunk.id).limit(1)) is None:
+            return []
         [query_vec] = embedder.embed([question], kind="query")
         agencies = detect_agencies(question)
         candidates = top_k * 4

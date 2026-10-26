@@ -18,7 +18,12 @@ USER user
 # free hosts (512 MB). docker-compose sets BAKE_DATA=false and uses Postgres instead.
 ARG BAKE_DATA=true
 ENV DATABASE_URL=sqlite:////app/data/papeles.db
-RUN if [ "$BAKE_DATA" = "true" ]; then python -m app.snapshot import; fi
+# Without a committed index the API still starts, answering from general guidance only.
+RUN if [ "$BAKE_DATA" = "true" ]; then \
+      if [ -f data/index/meta.json ]; then python -m app.snapshot import; \
+      else python -c "from app.db import init_db; init_db()" \
+           && echo "WARNING: no data/index/ yet; serving without official sources"; fi; \
+    fi
 
 EXPOSE 8000
 # Hosts such as Render tell the app which port to use through $PORT.

@@ -39,3 +39,12 @@ class Chunk(Base):
     )
 
     source: Mapped[Source] = relationship(back_populates="chunks")
+
+
+class EmbeddingCache(Base):
+    """Embeddings already paid for, keyed by model, kind and a hash of the text (see ingest)."""
+
+    __tablename__ = "embedding_cache"
+
+    key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    embedding: Mapped[list[float]] = mapped_column(JSON)
