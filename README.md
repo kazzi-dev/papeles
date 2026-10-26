@@ -2,6 +2,8 @@
 
 **Know exactly what to bring before you line up.**
 
+**▶ Live demo: [papeles-tau.vercel.app](https://papeles-tau.vercel.app)** (the API sleeps when idle, so the first question can take up to a minute)
+
 Papeles answers questions about Philippine government paperwork (SSS, PhilHealth, Pag-IBIG,
 PSA certificates, NBI clearance, PhilSys, LTO licenses) in English, Tagalog or Bisaya. Ask
 "what do I need for X" and get a checklist and next steps, backed by official agency sources
@@ -176,7 +178,7 @@ three chunks. Without this, the 1,500-chunk SSS Citizen's Charter crowds out the
 - [ ] Scheduled re-ingest so answers track requirement changes
 - [ ] Alembic migrations
 - [x] Free deployment setup (Vercel + Render), with rate limiting
-- [ ] Add the live demo link here once deployed
+- [x] Live demo on Vercel + Render
 
 ## Disclaimer
 
